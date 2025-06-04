@@ -1,26 +1,12 @@
-const express = require('express');
-const notificationController = require('../controllers/notificationController');
-const authController = require('../controllers/authController');
-const router = express.Router();
+const express = require("express")
+const router = express.Router()
+const NotificationController = require("../controllers/notificationController")
+const PushController = require("../controllers/pushController")
+const verifyApiKey = require("../middlewares/verifyApiKey");
 
-// Toutes les routes suivantes nécessitent une authentification
-router.use(authController.protect);
+router.post("/email", NotificationController.sendEmail)
+router.post("/sms", NotificationController.sendSMS)
+router.post("/push/token", verifyApiKey, PushController.savePushToken);
+router.post("/push/send", verifyApiKey, PushController.sendPushNotification);
 
-// Routes pour les notifications
-router.get('/', notificationController.getAllNotifications);
-router.get('/unread', notificationController.getUnreadNotifications);
-router.get('/stats', notificationController.getNotificationStats);
-router.delete('/all', notificationController.deleteAllNotifications);
-
-// Routes pour les notifications individuelles
-router.route('/:id')
-  .get(notificationController.getNotification)
-  .patch(notificationController.markAsRead)
-  .delete(notificationController.deleteNotification);
-
-// Envoi de notifications
-router.post('/send/email', notificationController.sendEmail);
-router.post('/send/sms', notificationController.sendSMS);
-router.post('/send/push', notificationController.sendPush);
-
-module.exports = router;
+module.exports = router

@@ -1,158 +1,117 @@
-const twilio = require('twilio');
-const logger = require('../utils/logger');
-const Notification = require('../models/notification');
+const twilio = require("twilio");
+const { logger } = require("../utils/transporter");
 
-class SMSService {
-  constructor() {
-    this.client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
-    this.phoneNumber = process.env.TWILIO_PHONE_NUMBER;
-    
-    // Vérifier les identifiants
-    this.verifyCredentials();
-  }
+const SmsService = {
 
-  async verifyCredentials() {
+  // Envoie un SMS contenant un code de réinitialisation de mot de passe
+  sendPasswordResetCode: async (phoneNumber, code) => {
     try {
-      await this.client.api.accounts(process.env.TWILIO_ACCOUNT_SID).fetch();
-      logger.info('Service SMS prêt');
-    } catch (error) {
-      logger.error('Erreur de connexion au service SMS:', error);
-    }
-  }
-
-  async sendSMS(options) {
-    try {
-      if (!options.to || !options.message) {
-        throw new Error('Numéro de téléphone et message requis pour envoyer un SMS');
+      let formattedPhone = phoneNumber;
+      if (phoneNumber.startsWith("0")) {
+        formattedPhone = "+33" + phoneNumber.substring(1);
+      } else if (!phoneNumber.startsWith("+")) {
+        formattedPhone = "+" + phoneNumber;
       }
 
-      // Vérifier et formater le numéro de téléphone
-      let toNumber = options.to;
-      if (!toNumber.startsWith('+')) {
-        toNumber = `+${toNumber}`; // Ajouter le préfixe + si nécessaire
-      }
-
-      // Créer l'enregistrement de notification
-      const notification = await Notification.create({
-        user: options.userId,
-        type: 'sms',
-        title: 'SMS Notification',
-        message: options.message,
-        status: 'pending',
-        metadata: {
-          to: toNumber
-        }
+      logger.log("🔍 Vérification configuration Twilio :", {
+        sid: process.env.TWILIO_SID ? "Défini" : "Non défini",
+        auth: process.env.TWILIO_AUTH ? "Défini" : "Non défini",
+        from: process.env.TWILIO_PHONE,
+        to: formattedPhone,
       });
 
-      // Envoyer le SMS via Twilio
-      const message = await this.client.messages.create({
-        body: options.message,
-        from: this.phoneNumber,
-        to: toNumber
-      });
-
-      // Mettre à jour le statut de la notification
-      await Notification.findByIdAndUpdate(notification._id, {
-        status: message.status === 'sent' ? 'sent' : 'pending',
-        deliveredAt: message.status === 'sent' ? Date.now() : undefined,
-        metadata: {
-          ...notification.metadata,
-          messageId: message.sid,
-          status: message.status
-        }
-      });
-
-      logger.info(`SMS envoyé à ${toNumber}: ${message.sid}`);
-      return { 
-        success: true, 
-        messageId: message.sid, 
-        status: message.status,
-        notificationId: notification._id 
-      };
-    } catch (error) {
-      logger.error(`Erreur lors de l'envoi du SMS à ${options.to}:`, error);
-      
-      // Mettre à jour le statut en cas d'échec
-      if (options.userId) {
-        await Notification.findOneAndUpdate(
-          { user: options.userId, type: 'sms', status: 'pending' },
-          {
-            status: 'failed',
-            failureReason: error.message
-          }
+      if (
+        !process.env.TWILIO_SID ||
+        !process.env.TWILIO_AUTH ||
+        !process.env.TWILIO_PHONE
+      ) {
+        throw new Error(
+          "Configuration Twilio incomplète : SID, AUTH ou PHONE manquant"
         );
       }
-      
-      return { success: false, error: error.message };
-    }
-  }
 
-  async sendVerificationCode(user, code) {
-    if (!user.phone) {
-      return { success: false, error: 'Numéro de téléphone non disponible' };
-    }
-
-    return this.sendSMS({
-      userId: user._id,
-      to: user.phone,
-      message: `Votre code de vérification pour RoadTrip! est: ${code}. Ce code expire dans 10 minutes.`
-    });
-  }
-
-  async sendPasswordResetCode(user, code) {
-    if (!user.phone) {
-      return { success: false, error: 'Numéro de téléphone non disponible' };
-    }
-
-    return this.sendSMS({
-      userId: user._id,
-      to: user.phone,
-      message: `Votre code de réinitialisation de mot de passe pour RoadTrip! est: ${code}. Ce code expire dans 10 minutes.`
-    });
-  }
-
-  // Webhook pour recevoir les mises à jour de statut des SMS de Twilio
-  async handleStatusUpdate(messageId, newStatus) {
-    try {
-      // Mettre à jour le statut de la notification
-      const notification = await Notification.findOne({
-        'metadata.messageId': messageId
-      });
-
-      if (!notification) {
-        logger.warn(`Notification non trouvée pour le messageId: ${messageId}`);
-        return { success: false, error: 'Notification non trouvée' };
+      let client;
+      try {
+        client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH);
+        logger.log("✅ Client Twilio initialisé avec succès");
+      } catch (initError) {
+        logger.error(
+          "❌ Erreur d'initialisation du client Twilio :",
+          initError
+        );
+        throw new Error(`Échec d'initialisation Twilio : ${initError.message}`);
       }
 
-      let status = 'pending';
-      if (newStatus === 'delivered') {
-        status = 'delivered';
-      } else if (newStatus === 'sent') {
-        status = 'sent';
-      } else if (['failed', 'undelivered'].includes(newStatus)) {
-        status = 'failed';
-      }
-
-      await Notification.findByIdAndUpdate(notification._id, {
-        status,
-        deliveredAt: newStatus === 'delivered' ? Date.now() : notification.deliveredAt,
-        failureReason: ['failed', 'undelivered'].includes(newStatus) ? `Statut Twilio: ${newStatus}` : undefined,
-        metadata: {
-          ...notification.metadata,
-          twilioStatus: newStatus
-        }
+      logger.log("📤 Envoi du SMS via Twilio");
+      const result = await client.messages.create({
+        body: `Code de réinitialisation RoadTrip : ${code}`,
+        from: process.env.TWILIO_PHONE,
+        to: formattedPhone,
       });
 
-      logger.info(`Statut SMS mis à jour: ${messageId} -> ${newStatus}`);
-      return { success: true };
+      logger.log("📨 Réponse Twilio :", {
+        sid: result.sid,
+        status: result.status,
+        dateCreated: result.dateCreated,
+        errorCode: result.errorCode,
+        errorMessage: result.errorMessage,
+      });
+
+      return result;
     } catch (error) {
-      logger.error(`Erreur lors de la mise à jour du statut SMS ${messageId}:`, error);
-      return { success: false, error: error.message };
+      logger.error("❌ Erreur détaillée lors de l'envoi du SMS :", {
+        message: error.message,
+        code: error.code,
+        moreInfo: error.moreInfo,
+        status: error.status,
+        details: error.details,
+      });
+      throw error;
     }
-  }
-}
+  },
 
-module.exports = new SMSService();
+  // Envoie un SMS générique avec un message libre
+  sendSMS: async (phoneNumber, message, type = "general") => {
+    try {
+      let formattedPhone = phoneNumber;
+      if (phoneNumber.startsWith("0")) {
+        formattedPhone = "+33" + phoneNumber.substring(1);
+      } else if (!phoneNumber.startsWith("+")) {
+        formattedPhone = "+" + phoneNumber;
+      }
+
+      if (
+        !process.env.TWILIO_SID ||
+        !process.env.TWILIO_AUTH ||
+        !process.env.TWILIO_PHONE
+      ) {
+        throw new Error("Configuration Twilio incomplète");
+      }
+
+      const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH);
+
+      const result = await client.messages.create({
+        body: message,
+        from: process.env.TWILIO_PHONE,
+        to: formattedPhone,
+      });
+
+      logger.log(`✅ SMS de type "${type}" envoyé :`, {
+        to: formattedPhone,
+        status: result.status,
+        sid: result.sid,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error(`❌ Erreur lors de l'envoi d'un SMS de type "${type}" :`, {
+        to: phoneNumber,
+        message: error.message,
+        code: error.code,
+      });
+      throw error;
+    }
+  },
+};
+
+module.exports = SmsService;

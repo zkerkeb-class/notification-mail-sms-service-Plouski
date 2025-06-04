@@ -1,47 +1,40 @@
 {
-  "name": "service-notification",
+  "name": "notification-service",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon server.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "security:audit": "npm audit",
+    "security:check": "npm audit --audit-level high",
+    "docker:build": "docker build -t auth-service .",
+    "docker:run": "docker run -p 5001:5001 --env-file .env auth-service",
+    "health:check": "curl -f http://localhost:5001/health || exit 1"
   },
-  "keywords": [
-    "notification",
-    "email",
-    "sms",
-    "push",
-    "microservice"
-  ],
+  "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "bcrypt": "^5.1.1",
-    "compression": "^1.8.0",
-    "cookie-parser": "^1.4.7",
+    "axios": "^1.8.4",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "express-mongo-sanitize": "^2.2.0",
+    "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
-    "firebase-admin": "^13.1.0",
-    "helmet": "^8.0.0",
-    "ioredis": "^5.6.0",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.11.0",
-    "morgan": "^1.10.0",
+    "firebase-admin": "^13.2.0",
+    "helmet": "^8.1.0",
     "nodemailer": "^6.10.0",
-    "rate-limit-redis": "^4.2.0",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1",
-    "twilio": "^5.4.5",
-    "validator": "^13.15.0",
-    "winston": "^3.17.0",
-    "xss-clean": "^0.1.4"
+    "nodemailer-mailjet-transport": "^1.0.4",
+    "prom-client": "^15.1.3",
+    "twilio": "^5.5.1",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "eslint": "^9.28.0",
+    "nodemon": "^3.1.10"
   }
 }
