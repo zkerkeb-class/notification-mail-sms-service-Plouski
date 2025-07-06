@@ -12,8 +12,8 @@ const {
   httpRequestsTotal,
   updateServiceHealth,
   updateActiveConnections,
-  updateExternalServiceHealth
-} = require('./metrics');
+  updateExternalServiceHealth,
+} = require("./metrics");
 const app = express();
 const PORT = process.env.PORT || 5005;
 const METRICS_PORT = process.env.METRICS_PORT || 9005;
@@ -28,30 +28,34 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
     // Vérification data-service
     logger.info("🔍 Vérification de la connexion au data-service...");
     try {
-      await dataService.getUserById("health-check");
+      await dataService.checkHealth();
       logger.info("✅ Data-service disponible");
-      updateExternalServiceHealth('data-service', true);
+      updateExternalServiceHealth("data-service", true);
     } catch (error) {
       if (error.response?.status === 404) {
-        logger.info("✅ Data-service disponible (test user non trouvé = normal)");
-        updateExternalServiceHealth('data-service', true);
+        logger.info(
+          "✅ Data-service disponible (test user non trouvé = normal)"
+        );
+        updateExternalServiceHealth("data-service", true);
       } else {
         logger.error("❌ Data-service indisponible:", error.message);
         logger.warn("⚠️ Démarrage en mode dégradé");
-        updateExternalServiceHealth('data-service', false);
+        updateExternalServiceHealth("data-service", false);
       }
     }
 
     // MIDDLEWARES SPÉCIFIQUES NOTIFICATION
 
-    app.use(helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          connectSrc: ["'self'", "https://fcm.googleapis.com"],
+    app.use(
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            connectSrc: ["'self'", "https://fcm.googleapis.com"],
+          },
         },
-      },
-    }));
+      })
+    );
 
     app.use(basicLimiter);
 
@@ -96,7 +100,11 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
           status_code: res.statusCode,
         });
 
-        logger.info(`${req.method} ${req.path} - ${res.statusCode} - ${Math.round(duration * 1000)}ms`);
+        logger.info(
+          `${req.method} ${req.path} - ${res.statusCode} - ${Math.round(
+            duration * 1000
+          )}ms`
+        );
       });
 
       next();
@@ -122,41 +130,41 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
         uptime: process.uptime(),
         service: SERVICE_NAME,
         version: "1.0.0",
-        dependencies: {}
+        dependencies: {},
       };
 
       // Vérifier data-service
       try {
-        await dataService.getUserById("health-check-test");
+        await dataService.checkHealth();
         health.dependencies.dataService = "healthy";
-        updateExternalServiceHealth('data-service', true);
+        updateExternalServiceHealth("data-service", true);
       } catch (error) {
         if (error.response?.status === 404) {
           health.dependencies.dataService = "healthy";
-          updateExternalServiceHealth('data-service', true);
+          updateExternalServiceHealth("data-service", true);
         } else {
           health.dependencies.dataService = "unhealthy";
           health.status = "degraded";
-          updateExternalServiceHealth('data-service', false);
+          updateExternalServiceHealth("data-service", false);
         }
       }
 
       // Vérifier Firebase
       if (process.env.FIREBASE_PROJECT_ID) {
         health.dependencies.firebase = "configured";
-        updateExternalServiceHealth('firebase', true);
+        updateExternalServiceHealth("firebase", true);
       } else {
         health.dependencies.firebase = "not_configured";
-        updateExternalServiceHealth('firebase', false);
+        updateExternalServiceHealth("firebase", false);
       }
 
       // Vérifier Email (Mailjet)
       if (process.env.MAILJET_API_KEY) {
         health.dependencies.email = "configured";
-        updateExternalServiceHealth('mailjet', true);
+        updateExternalServiceHealth("mailjet", true);
       } else {
         health.dependencies.email = "not_configured";
-        updateExternalServiceHealth('mailjet', false);
+        updateExternalServiceHealth("mailjet", false);
       }
 
       const isHealthy = health.status === "healthy";
@@ -176,19 +184,19 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
         cpu: process.cpuUsage(),
         status: "running",
         active_connections: currentConnections,
-        
+
         providers: {
           email: !!process.env.MAILJET_API_KEY,
           sms: !!process.env.SMS_API_KEY,
-          firebase: !!process.env.FIREBASE_PROJECT_ID
+          firebase: !!process.env.FIREBASE_PROJECT_ID,
         },
-        
+
         endpoints: [
           "POST /api/notifications/email",
           "POST /api/notifications/sms",
           "POST /api/notifications/push/token",
-          "POST /api/notifications/push/send"
-        ]
+          "POST /api/notifications/push/send",
+        ],
       };
 
       res.json(vitals);
@@ -200,7 +208,7 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
         status: "pong ✅",
         service: SERVICE_NAME,
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
       });
     });
 
@@ -212,9 +220,14 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
         service: SERVICE_NAME,
         message: `${req.method} ${req.path} n'existe pas`,
         availableRoutes: [
-          "GET /health", "GET /vitals", "GET /metrics", "GET /ping",
-          "POST /api/notifications/email", "POST /api/notifications/sms",
-          "POST /api/notifications/push/token", "POST /api/notifications/push/send"
+          "GET /health",
+          "GET /vitals",
+          "GET /metrics",
+          "GET /ping",
+          "POST /api/notifications/email",
+          "POST /api/notifications/sms",
+          "POST /api/notifications/push/token",
+          "POST /api/notifications/push/send",
         ],
         timestamp: new Date().toISOString(),
       });
@@ -251,7 +264,7 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
       }
 
       if (err.message && err.message.includes("data-service")) {
-        updateExternalServiceHealth('data-service', false);
+        updateExternalServiceHealth("data-service", false);
         return res.status(503).json({
           error: "Service temporairement indisponible",
           service: SERVICE_NAME,
@@ -277,26 +290,25 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
       console.log(`❤️ Health: http://localhost:${PORT}/health`);
       console.log(`📈 Vitals: http://localhost:${PORT}/vitals`);
       console.log(`🔔 API: http://localhost:${PORT}/api/notifications`);
-      
+
       updateServiceHealth(SERVICE_NAME, true);
       logger.info(`✅ ${SERVICE_NAME} avec métriques démarré`);
     });
 
     // Serveur métriques séparé
     const metricsApp = express();
-    metricsApp.get('/metrics', async (req, res) => {
-      res.set('Content-Type', register.contentType);
+    metricsApp.get("/metrics", async (req, res) => {
+      res.set("Content-Type", register.contentType);
       res.end(await register.metrics());
     });
 
-    metricsApp.get('/health', (req, res) => {
-      res.json({ status: 'healthy', service: `${SERVICE_NAME}-metrics` });
+    metricsApp.get("/health", (req, res) => {
+      res.json({ status: "healthy", service: `${SERVICE_NAME}-metrics` });
     });
 
     metricsApp.listen(METRICS_PORT, () => {
       console.log(`📊 Metrics server running on port ${METRICS_PORT}`);
     });
-
   } catch (err) {
     console.error("❌ Erreur fatale au démarrage :", err.message);
     updateServiceHealth(SERVICE_NAME, false);
@@ -309,11 +321,11 @@ console.log(`🔥 Lancement du ${SERVICE_NAME}...`);
 function gracefulShutdown(signal) {
   console.log(`🔄 Arrêt ${SERVICE_NAME} (${signal})...`);
   updateServiceHealth(SERVICE_NAME, false);
-  updateExternalServiceHealth('data-service', false);
-  updateExternalServiceHealth('firebase', false);
-  updateExternalServiceHealth('mailjet', false);
+  updateExternalServiceHealth("data-service", false);
+  updateExternalServiceHealth("firebase", false);
+  updateExternalServiceHealth("mailjet", false);
   updateActiveConnections(0);
-  
+
   setTimeout(() => {
     process.exit(0);
   }, 1000);
@@ -322,13 +334,13 @@ function gracefulShutdown(signal) {
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection:', reason);
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error("Unhandled Rejection:", reason);
   updateServiceHealth(SERVICE_NAME, false);
 });
 
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught Exception:", error);
   updateServiceHealth(SERVICE_NAME, false);
   process.exit(1);
 });
